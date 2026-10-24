@@ -172,8 +172,8 @@ function say(t,lang,alt){speaking=true;var s=window.speechSynthesis;
  if(ch){v=ch;if(lg(ch).indexOf('hi')!==0&&alt)txt=alt}
  else{v=pick(lang.toLowerCase())||pick(lang.slice(0,2).toLowerCase());if(!v&&alt){v=pick('en-in')||pick('en');txt=alt}}
  if(!v){v=pick('en');if(alt)txt=alt}
- if(!v){speaking=false;log('EVA','Is device par koi voice engine nahi mila.');setTimeout(listen,300);return}
- s.cancel();var u=new SpeechSynthesisUtterance(txt);u.voice=v;u.lang=v.lang;u.pitch=(auto&&!FEM.test(v.name))?1.35:1.05;u.rate=.95;
+ if(!v&&alt){txt=alt;lang='en-IN'}
+ s.cancel();var u=new SpeechSynthesisUtterance(txt);if(v){u.voice=v;u.lang=v.lang}else{u.lang=lang}u.pitch=(auto&&!(v&&FEM.test(v.name)))?1.35:1.05;u.rate=.95;
  var done=false,tm;function fin(){if(done)return;done=true;clearTimeout(tm);speaking=false;setTimeout(listen,300)}
  tm=setTimeout(fin,Math.max(4000,txt.length*130));
  u.onend=u.onerror=fin;window._u=u;s.resume();s.speak(u)}
