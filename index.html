@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<title>EVA – Holographic Assistant</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:dark;--ac:#19d3ff;--dim:rgba(25,211,255,.35);--pn:rgba(2,18,30,.6);box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:#01060c;color:var(--ac);font-family:"Share Tech Mono",ui-monospace,Menlo,Consolas,monospace;overflow:hidden}
+#app{position:relative;height:100%}
+#stage{position:absolute;inset:0;touch-action:none}
+#stage canvas{display:block;width:100%;height:100%}
+.ov{position:absolute;pointer-events:none}
+#hdr{left:14px;top:8px;right:14px;border-bottom:1px solid var(--dim);padding-bottom:8px}
+#ttl{font-family:Orbitron,sans-serif;font-weight:800;font-size:34px;letter-spacing:.35em}
+#sub{font-size:11px;letter-spacing:.2em;opacity:.85}
+#clk{right:16px;top:8px;font-size:22px;letter-spacing:.1em}
+.pn{border:1px solid var(--dim);background:var(--pn);padding:8px 10px;font-size:12px;letter-spacing:.12em}
+#sys{left:12px;top:92px;width:190px}
+#log{right:12px;top:92px;width:240px;max-height:140px;overflow:hidden}
+#log .h{opacity:.6;margin-bottom:6px}
+#lg div{margin-bottom:4px;font-size:12px;line-height:1.35;letter-spacing:.04em}
+.bar{height:4px;background:rgba(255,255,255,.12);margin:3px 0 8px}
+.bar i{display:block;height:100%;width:50%;background:var(--ac);box-shadow:0 0 8px var(--ac);transition:width 1s}
+#dock{position:absolute;left:0;right:0;bottom:0;padding:8px 12px calc(8px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:6px;pointer-events:none}
+#dock button,#dock input{pointer-events:auto}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.lbl{font-size:11px;letter-spacing:.15em;opacity:.8}
+button{font:inherit;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ac);background:var(--pn);border:1px solid var(--ac);padding:6px 10px}
+button.on{background:var(--ac);color:#01131c}
+button.off{opacity:.4;text-decoration:line-through}
+input[type=range]{accent-color:var(--ac);width:150px}
+select{font:inherit;font-size:12px;color:var(--ac);background:var(--pn);border:1px solid var(--ac);padding:6px;max-width:170px}
+#cap{font-size:12px;min-height:16px;display:none;background:var(--pn);padding:4px 8px}
+#inrow{display:flex;gap:6px}
+#tin{flex:1;min-width:0;font:inherit;font-size:13px;color:var(--ac);background:var(--pn);border:1px solid var(--ac);padding:8px 10px}
+#tin::placeholder{color:var(--ac);opacity:.55}
+#inrow button{font-size:13px;padding:8px 12px}
+@media(max-width:760px){#ttl{font-size:24px}#clk{top:46px;font-size:15px}#log{display:none}#cap{display:block}#sys{top:84px;width:150px;padding:6px 8px}.bar{margin-bottom:5px}#sys .big{display:none}}
+</style>
+</head>
+<body>
+<div id="app">
+<div id="stage"></div>
+<div id="hdr" class="ov"><div id="ttl">E V A</div><div id="sub">ENHANCED VIRTUAL ASSISTANT · <span id="st">ONLINE</span></div></div>
+<div id="clk" class="ov"></div>
+<div id="sys" class="pn ov"><div style="margin-bottom:6px">SYSTEM</div>
+<div>CORE</div><div class="bar"><i id="b0"></i></div><div>MEMORY</div><div class="bar"><i id="b1"></i></div><div>NETWORK</div><div class="bar"><i id="b2"></i></div><div>SHIELD</div><div class="bar"><i id="b3"></i></div>
+<div id="stt">STATUS: NOMINAL</div></div>
+<div id="log" class="pn ov"><div class="h">LOG</div><div id="lg"></div></div>
+<div id="dock">
+<div class="row" id="parts"><span class="lbl">PARTS</span></div>
+<div class="row"><span class="lbl">EXPLODE</span><input type="range" id="ex" min="0" max="100" value="0"><button id="hide">HIDE</button><button id="reset">RESET</button><select id="vsel" title="EVA ki awaaz"><option value="">Auto (ladki)</option></select></div>
+<div class="row" id="qc"></div>
+<div id="cap"></div>
+<div id="inrow"><input id="tin" placeholder="EVA se kuch bolo… (e.g. hello, scan, time)" autocomplete="off"><button id="send">SEND</button><button id="mic">MIC</button><button id="voice" class="on">VOICE</button><button id="auto" class="on">AUTO</button></div>
+</div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+var stage=$('stage'),AC=0x19d3ff;
+var scene=new THREE.Scene(),cam=new THREE.PerspectiveCamera(50,1,.1,100),zT=13,first=true;cam.position.set(0,0,zT);
+var rd=new THREE.WebGLRenderer({antialias:true,alpha:true});rd.setPixelRatio(Math.min(devicePixelRatio,2));stage.appendChild(rd.domElement);
+var root=new THREE.Group();root.position.y=.8;scene.add(root);
+var ADD=THREE.AdditiveBlending,V=THREE.Vector3,mats=[];
+function mk(g,op,solid){var m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:AC,wireframe:!solid,transparent:true,opacity:op,blending:ADD,depthWrite:false}));m.userData.o=op;mats.push(m.material);return m}
+function glowTex(){var c=document.createElement('canvas');c.width=c.height=128;var x=c.getContext('2d'),g=x.createRadialGradient(64,64,0,64,64,64);g.addColorStop(0,'rgba(255,255,255,1)');g.addColorStop(.25,'rgba(255,255,255,.35)');g.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=g;x.fillRect(0,0,128,128);return new THREE.CanvasTexture(c)}
+var parts=[];
+function addPart(id,name,g,dir){var p={id:id,name:name,g:g,dir:dir,hidden:false,mm:[]};g.traverse(function(o){if(o.isMesh){o.userData.part=p;p.mm.push(o)}});root.add(g);parts.push(p);return p}
+
+/* CORE */
+var core=new THREE.Group();core.add(mk(new THREE.SphereGeometry(.9,24,24),.3,true));core.add(mk(new THREE.IcosahedronGeometry(.95,1),.8));core.add(mk(new THREE.SphereGeometry(.28,12,12),1,true));
+var spr=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex(),color:AC,transparent:true,blending:ADD,depthWrite:false,opacity:.55}));spr.scale.set(4.2,4.2,1);core.add(spr);mats.push(spr.material);
+addPart('core','CORE',core,new V(0,0,0));
+/* ENERGY */
+var en=new THREE.Group(),e1=mk(new THREE.DodecahedronGeometry(1.5,0),.6),e2=mk(new THREE.IcosahedronGeometry(1.25,1),.5);en.add(e1);en.add(e2);
+addPart('energy','ENERGY',en,new V(0,2.4,0));
+/* SHELL */
+var sh=new THREE.Group();sh.add(mk(new THREE.IcosahedronGeometry(2.25,2),.3));
+addPart('shell','SHELL',sh,new V(0,-3,0));
+/* RINGS */
+function ring(rx,ry,rz){var g=new THREE.Group(),t=mk(new THREE.TorusGeometry(2.8,.06,8,120),.9,true);t.scale.y=.45;g.add(t);g.rotation.set(rx,ry,rz);g.userData.spin=t;return g}
+var r1=ring(0,0,.9),r2=ring(0,0,-.9),r3=ring(1.2,.5,0);
+addPart('ring1','RING-1',r1,new V(-3,0,0));addPart('ring2','RING-2',r2,new V(3,0,0));addPart('ring3','RING-3',r3,new V(0,0,3.5));
+/* ARC (tick ring) */
+var arc=new THREE.Group();(function(){for(var i=0;i<48;i++){var a=i/48*Math.PI*2,l=i%4===0?.45:.25,b=mk(new THREE.BoxGeometry(.07,.07,l),.9,true);b.position.set(Math.cos(a)*2.45,0,Math.sin(a)*2.45);b.rotation.y=Math.PI/2-a;arc.add(b)}})();arc.rotation.x=.35;
+addPart('arc','ARC',arc,new V(0,3.9,0));
+/* DUST */
+var dg=new THREE.Group(),dm=new THREE.PointsMaterial({color:AC,size:.05,transparent:true,opacity:.7,blending:ADD,depthWrite:false});mats.push(dm);
+(function(){var n=700,p=new Float32Array(n*3);for(var i=0;i<n;i++){var r=3+Math.random()*6,a=Math.random()*6.283;p[i*3]=Math.cos(a)*r;p[i*3+1]=(Math.random()-.5)*12;p[i*3+2]=Math.sin(a)*r}
+var g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(p,3));dg.add(new THREE.Points(g,dm))})();
+addPart('dust','DUST',dg,new V(0,0,0));
+var grid=new THREE.GridHelper(26,40,0x0b4a66,0x083247);grid.position.y=-4.6;scene.add(grid);
+
+/* state + UI */
+var sel=null,exT=0,exC=0,scanT=0,voiceOn=true,conv=false,busy=false,speaking=false,rec=null,sample=null,hist=[],logs=[];
+var pb=$('parts'),hideB=$('hide');
+function ui(){
+ pb.querySelectorAll('button').forEach(function(b){b.remove()});
+ parts.forEach(function(p){var b=document.createElement('button');b.textContent=p.name;b.className=(p===sel?'on ':'')+(p.hidden?'off':'');b.onclick=function(){sel=(sel===p?null:p);ui()};pb.appendChild(b)});
+ hideB.textContent=sel&&sel.hidden?'SHOW':'HIDE';
+}
+ui();
+hideB.onclick=function(){if(sel){sel.hidden=!sel.hidden;ui()}};
+function setEx(v){exT=v;$('ex').value=v*100}
+$('ex').oninput=function(){exT=this.value/100};
+function reset(){parts.forEach(function(p){p.hidden=false});sel=null;setEx(0);zT=cam.aspect<1?20:13;ui()}
+$('reset').onclick=reset;
+var COL={red:0xff3b3b,gold:0xffc400,gold2:0xffc400,cyan:0x19d3ff,blue:0x3b82ff,green:0x39ff88,purple:0xb36bff,orange:0xff8a1f,white:0xe8fbff};
+function setColor(h){AC=h;mats.forEach(function(m){m.color.set(h)});var c=new THREE.Color(h),R=Math.round(c.r*255),G=Math.round(c.g*255),B=Math.round(c.b*255),s=document.documentElement.style;s.setProperty('--ac','rgb('+R+','+G+','+B+')');s.setProperty('--dim','rgba('+R+','+G+','+B+',.35)')}
+['explode','assemble','hello','scan','status','joke','colour red','colour gold'].forEach(function(t){var b=document.createElement('button');b.textContent=t;b.style.textTransform='none';b.onclick=function(){unlock();handle(t)};$('qc').appendChild(b)});
+function log(w,t){logs.push([w,t]);if(logs.length>40)logs.shift();var h='';logs.slice(-4).forEach(function(l){h+='<div>'+l[0]+': '+esc(l[1])+'</div>'});$('lg').innerHTML=h;if(w==='EVA')$('cap').textContent='EVA: '+t}
+function esc(s){return String(s).replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c]})}
+log('EVA','Systems online. Namaste, main EVA hoon. "help" likho commands ke liye.');
+setInterval(function(){$('clk').textContent=new Date().toTimeString().slice(0,8)},500);$('clk').textContent=new Date().toTimeString().slice(0,8);
+var base=[.9,.6,.7,.8];
+function pHid(id){return parts.filter(function(p){return p.id===id})[0].hidden}
+function bars(){var coreOff=pHid('core'),shOff=pHid('shell');
+ base.forEach(function(b,i){var v=Math.max(.05,Math.min(1,b+Math.random()*.2-.1));if(i===0&&coreOff)v=.05;if(i===3&&shOff)v=.08;$('b'+i).style.width=(v*100)+'%'});
+ var s=coreOff?'CORE OFFLINE':shOff?'SHIELD DOWN':'NOMINAL';$('stt').textContent='STATUS: '+s;$('st').textContent=coreOff?'LOW POWER':'ONLINE'}
+setInterval(bars,1200);bars();
+
+/* assistant brain */
+var JOKES=['Maine WiFi se poocha: itna slow kyun? Bola: main sirf EVA ke liye fast hoon.','Programmer ka dil kyun toota? Uske pyaar mein bahut saare bugs the.','Mera battery 1 percent par hai, par attitude 100 percent par.'];
+function statusText(){var off=parts.filter(function(p){return p.hidden}).map(function(p){return p.name});return 'Sab systems nominal. Parts: '+parts.length+', offline: '+(off.length?off.join(', '):'koi nahi')+'.'}
+function local(t){var s=t.toLowerCase(),m;
+ if((m=s.match(/colou?r\s+(\w+)/))){var c=COL[m[1]];if(c){setColor(c);return 'Colour '+m[1]+' set ho gaya.'}return 'Yeh colour nahi pata. Try: red, gold, blue, green, purple, cyan.'}
+ if(/explode|alag kar/.test(s)){setEx(1);return 'Explode mode on. Saare parts alag ho gaye.'}
+ if(/assemble|jodo|wapas/.test(s)){setEx(0);return 'Assembling. Parts wapas jud gaye.'}
+ if(/^(hello|hi|hey|namaste|hii)/.test(s))return 'Namaste! Main EVA hoon. Kaise madad karun?';
+ if(/scan/.test(s)){scanT=3;return 'Scanning... aas-paas koi khatra nahi mila. Sab clear hai.'}
+ if(/status/.test(s))return statusText();
+ if(/joke/.test(s))return JOKES[Math.floor(Math.random()*JOKES.length)];
+ if(/\b(time|samay|baje)\b/.test(s))return 'Abhi samay hai '+new Date().toLocaleTimeString()+'.';
+ if(/^reset/.test(s)){reset();return 'System reset ho gaya.'}
+ if(/^key reset/.test(s)){try{localStorage.removeItem('eva_key')}catch(e){}return 'API key hata di. Agli baar naya poochungi.'}
+ if((m=s.match(/^model\s+(\S+)/))){try{localStorage.setItem('eva_model',m[1])}catch(e){}return 'Model badal diya: '+m[1]}
+ if(/^help/.test(s))return 'Commands: explode, assemble, scan, status, joke, time, reset, colour red/gold/blue/green/purple. Ya kuch bhi poochho, main jawab dungi.';
+ return null}
+function act(a){if(!a||!a.type)return;var p=parts.filter(function(x){return x.id===a.part})[0];
+ switch(a.type){case 'explode':setEx(1);break;case 'assemble':setEx(0);break;case 'reset':reset();break;case 'scan':scanT=3;break;
+ case 'colour':if(COL[a.value])setColor(COL[a.value]);break;
+ case 'hide':if(p){p.hidden=true;sel=p}break;case 'show':if(p){p.hidden=false;sel=p}break;case 'select':if(p)sel=p;break}
+ ui()}
+function getKey(){var k='';try{k=localStorage.getItem('eva_key')||''}catch(e){}
+ if(!k){k=(prompt('Gemini API key daalo (AIza...). Ye sirf aapke phone mein save hogi.')||'').trim();if(k){try{localStorage.setItem('eva_key',k)}catch(e){}}}return k}
+function getModel(){var m='';try{m=localStorage.getItem('eva_model')||''}catch(e){}return m||'gemini-flash-latest'}
+sample={json:function(pr){var k=getKey();if(!k)return Promise.reject(new Error('key nahi mili'));
+ return fetch('https://generativelanguage.googleapis.com/v1beta/models/'+getModel()+':generateContent',{method:'POST',headers:{'content-type':'application/json','x-goog-api-key':k},body:JSON.stringify({contents:[{role:'user',parts:[{text:pr}]}],generationConfig:{maxOutputTokens:500}})})
+ .then(function(r){if(!r.ok){if(r.status===400||r.status===403){try{localStorage.removeItem('eva_key')}catch(e){}}throw new Error('HTTP '+r.status+(r.status===429?' (free limit, thodi der ruko)':r.status===404?' (model naam galat, "model NAAM" likho)':''))}return r.json()})
+ .then(function(d){var t='';try{t=d.candidates[0].content.parts.map(function(p){return p.text||''}).join('')}catch(e){}
+  var a=t.indexOf('{'),b=t.lastIndexOf('}');try{return JSON.parse(t.slice(a,b+1))}catch(e){return{reply:t||'Ji, boliye.',speak:t||'Ji, boliye.'}}})}};
+var vsel=$('vsel'),FEM=/female|swara|neerja|heera|kalpana|zira|samantha|susan|hazel|karen|veena|lekha|priya|aditi|raveena|tessa|moira|fiona|victoria|google हिन्दी|google hindi|google us english|google uk english female/i,
+ MAL=/male|madhur|hemant|prabhat|kabir|ravi|rishi|david|mark|james|daniel|george|guy|ryan|alex|fred|-x-(hid|ene|end|ahp)/i;
+function allV(){return window.speechSynthesis?speechSynthesis.getVoices():[]}
+function lg(v){return (v.lang||'').replace('_','-').toLowerCase()}
+function pick(pre){var vs=allV().filter(function(v){return lg(v).indexOf(pre)===0});
+ var f=vs.filter(function(v){return FEM.test(v.name)});if(f.length)return f[0];
+ var nm=vs.filter(function(v){return !MAL.test(v.name)});return nm[0]||vs[0]||null}
+function fillVoices(){var vs=allV().filter(function(v){var l=lg(v);return l.indexOf('hi')===0||l.indexOf('en')===0}),cur=vsel.value;
+ vsel.innerHTML='<option value="">Auto (ladki)</option>';
+ vs.forEach(function(v){var o=document.createElement('option');o.value=v.name;o.textContent=v.name+' ('+v.lang+')';vsel.appendChild(o)});vsel.value=cur}
+if(window.speechSynthesis){speechSynthesis.onvoiceschanged=fillVoices}fillVoices();
+function unlock(){var s=window.speechSynthesis;if(!s)return;try{s.resume();var u=new SpeechSynthesisUtterance(' ');u.volume=0;s.speak(u)}catch(x){}}
+function say(t,lang,alt){speaking=true;var s=window.speechSynthesis;
+ if(!voiceOn||!s){speaking=false;setTimeout(listen,300);return}
+ var ch=vsel.value?allV().filter(function(v){return v.name===vsel.value})[0]:null,v,txt=t,auto=!ch;
+ if(ch){v=ch;if(lg(ch).indexOf('hi')!==0&&alt)txt=alt}
+ else{v=pick(lang.toLowerCase())||pick(lang.slice(0,2).toLowerCase());if(!v&&alt){v=pick('en-in')||pick('en');txt=alt}}
+ if(!v){v=pick('en');if(alt)txt=alt}
+ if(!v){speaking=false;log('EVA','Is device par koi voice engine nahi mila.');setTimeout(listen,300);return}
+ s.cancel();var u=new SpeechSynthesisUtterance(txt);u.voice=v;u.lang=v.lang;u.pitch=(auto&&!FEM.test(v.name))?1.35:1.05;u.rate=.95;
+ var done=false,tm;function fin(){if(done)return;done=true;clearTimeout(tm);speaking=false;setTimeout(listen,300)}
+ tm=setTimeout(fin,Math.max(4000,txt.length*130));
+ u.onend=u.onerror=fin;window._u=u;s.resume();s.speak(u)}
+function handle(text){text=(text||'').trim();if(!text||busy)return;log('YOU',text);
+ var r=local(text);if(r!==null){log('EVA',r);say(r,'en-IN');return}
+ if(!sample){var m='AI access nahi mila. "help" try karo.';log('EVA',m);say(m,'en-IN');return}
+ busy=true;log('EVA','soch rahi hoon…');
+ var st=parts.map(function(p){return p.id+' ('+p.name+'): '+(p.hidden?'hidden':'on')}).join(', ');
+ var pr='Tum EVA ho, Tony Stark ke JARVIS jaisi 3D hologram AI assistant. Chhota (1-3 vaakya), dostana jawab do, Hinglish mein. Parts: '+st+'. Explode: '+exT+'. Agar user part hide/show, explode, assemble, scan, reset ya colour badalna chahe to action do. Sirf JSON do, aur kuch nahi: {"reply":"Hinglish Roman mein jawab","speak":"wahi jawab Devanagari Hindi mein, bolne ke liye","action":null ya {"type":"hide|show|explode|assemble|scan|reset|colour|select","part":"core|energy|shell|ring1|ring2|ring3|arc|dust","value":"red|gold|blue|green|purple|cyan|orange (sirf colour ke liye)"}}.\nBaatcheet:\n'+hist.slice(-6).join('\n')+'\nUser: '+text;
+ sample.json(pr,{cache:false}).then(function(o){
+  if(typeof o==='string'){try{o=JSON.parse(o)}catch(x){o={reply:o,speak:o}}}
+  o=o||{};var rp=o.reply||'Ji, boliye.';hist.push('User: '+text);hist.push('EVA: '+rp);
+  busy=false;log('EVA',rp);act(o.action);say(o.speak||rp,'hi-IN',rp)
+ }).catch(function(er){busy=false;log('EVA','Jawab nahi aaya: '+((er&&er.message)||'error')+'. Dobara try karo.');setTimeout(listen,500)})}
+var SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+function listen(){if(!conv||busy||speaking||rec)return;
+ if(!SR){log('EVA','Is browser mein voice input nahi hai. Chrome ya Safari try karo, ya type karo.');conv=false;$('mic').className='';return}
+ var r=new SR(),fin='';r.lang='hi-IN';r.interimResults=true;r.continuous=false;
+ r.onresult=function(e){var s='';for(var i=0;i<e.results.length;i++)s+=e.results[i][0].transcript;fin=s;$('tin').value=s};
+ r.onstart=function(){$('st').textContent='LISTENING…'};r.onerror=function(e){if(e.error==='not-allowed'||e.error==='service-not-allowed'){conv=false;$('mic').className='';log('EVA','Mic block hai ('+e.error+'). Is page ko seedha Chrome mein kholo, ya file download karke kholo.')}else if(e.error!=='no-speech'&&e.error!=='aborted'){log('EVA','Mic error: '+e.error)}};
+ r.onend=function(){rec=null;if(fin){$('tin').value='';handle(fin)}else if(conv&&!busy&&!speaking)setTimeout(listen,300)};
+ rec=r;try{r.start()}catch(x){rec=null}}
+$('mic').onclick=function(){unlock();conv=!conv;this.className=conv?'on':'';
+ if(conv){if(window.speechSynthesis)window.speechSynthesis.cancel();var g='Namaste, main EVA hoon. Boliye.';log('EVA',g);say(g,'en-IN')}
+ else{if(rec){try{rec.abort()}catch(x){}}if(window.speechSynthesis)window.speechSynthesis.cancel();speaking=false;rec=null}};
+$('voice').onclick=function(){voiceOn=!voiceOn;this.className=voiceOn?'on':'';if(!voiceOn&&window.speechSynthesis){window.speechSynthesis.cancel();speaking=false}};
+$('send').onclick=function(){unlock();var v=$('tin').value;$('tin').value='';handle(v)};
+$('tin').onkeydown=function(e){if(e.key==='Enter')$('send').onclick()};
+var autoOn=true,atm;
+$('auto').onclick=function(){autoOn=!autoOn;this.className=autoOn?'on':'';clearTimeout(atm)};
+function arm(){clearTimeout(atm);if(!autoOn||!$('tin').value.trim())return;atm=setTimeout(function(){if(busy||speaking){arm();return}var v=$('tin').value;$('tin').value='';unlock();handle(v)},2000)}
+$('tin').addEventListener('input',arm);
+
+/* interaction */
+var ptrs={},moved=0,pd=0,el=rd.domElement;
+el.addEventListener('pointerdown',function(e){el.setPointerCapture(e.pointerId);ptrs[e.pointerId]={x:e.clientX,y:e.clientY};if(Object.keys(ptrs).length===1)moved=0;pd=0});
+el.addEventListener('pointermove',function(e){var p=ptrs[e.pointerId];if(!p)return;var n={x:e.clientX,y:e.clientY},ids=Object.keys(ptrs);
+ if(ids.length===1){var dx=n.x-p.x,dy=n.y-p.y;moved+=Math.abs(dx)+Math.abs(dy);root.rotation.y+=dx*.008;root.rotation.x=Math.max(-1.2,Math.min(1.2,root.rotation.x+dy*.006))}
+ else if(ids.length===2){var o=ptrs[ids[0]==e.pointerId?ids[1]:ids[0]],d=Math.hypot(n.x-o.x,n.y-o.y);if(pd)zT=Math.max(6,Math.min(26,zT-(d-pd)*.04));pd=d;moved+=10}
+ ptrs[e.pointerId]=n});
+el.addEventListener('pointerup',function(e){var had=ptrs[e.pointerId];delete ptrs[e.pointerId];pd=0;if(had&&moved<8&&!Object.keys(ptrs).length)pick(e)});
+el.addEventListener('pointercancel',function(e){delete ptrs[e.pointerId]});
+el.addEventListener('wheel',function(e){e.preventDefault();zT=Math.max(6,Math.min(26,zT+e.deltaY*.012))},{passive:false});
+var ray=new THREE.Raycaster(),mv=new THREE.Vector2();
+function pick(e){var r=el.getBoundingClientRect();mv.set(((e.clientX-r.left)/r.width)*2-1,-((e.clientY-r.top)/r.height)*2+1);ray.setFromCamera(mv,cam);
+ var vis=[];parts.forEach(function(p){if(!p.hidden)vis=vis.concat(p.mm)});var h=ray.intersectObjects(vis,false);
+ var hit=null;for(var i=0;i<h.length;i++){if(h[i].object.userData.part.id!=='shell'){hit=h[i].object.userData.part;break}}
+ if(!hit&&h.length)hit=h[0].object.userData.part;sel=hit;ui()}
+function rs(){var w=stage.clientWidth,h=stage.clientHeight;rd.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix();if(first){first=false;zT=cam.aspect<1?20:13}}
+addEventListener('resize',rs);new ResizeObserver(rs).observe(stage);rs();
+
+/* loop */
+var last=performance.now(),t=0;
+function loop(now){requestAnimationFrame(loop);var dt=Math.min(.05,(now-last)/1000);last=now;t+=dt;
+ cam.position.z+=(zT-cam.position.z)*.12;exC+=(exT-exC)*.08;
+ var k=scanT>0?4:1;if(scanT>0)scanT-=dt;
+ if(!Object.keys(ptrs).length)root.rotation.y+=.0025;
+ r1.userData.spin.rotation.z+=.012*k;r2.userData.spin.rotation.z-=.016*k;r3.userData.spin.rotation.z+=.02*k;
+ arc.rotation.y+=.006*k;e1.rotation.y+=.01;e1.rotation.x+=.006;e2.rotation.y-=.014;sh.rotation.y-=.003;dg.rotation.y+=.0015;
+ var s=1+.06*Math.sin(t*3)+(scanT>0?.15*Math.abs(Math.sin(t*10)):0);core.scale.setScalar(s);
+ parts.forEach(function(p){p.g.position.copy(p.dir).multiplyScalar(exC);p.g.visible=!p.hidden;
+  var f=p===sel?1.8:1;for(var i=0;i<p.mm.length;i++){var m=p.mm[i];m.material.opacity=Math.min(1,m.userData.o*f)}});
+ rd.render(scene,cam)}
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
