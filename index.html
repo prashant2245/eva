@@ -128,6 +128,23 @@ function bars(){var coreOff=pHid('core'),shOff=pHid('shell');
  var s=coreOff?'CORE OFFLINE':shOff?'SHIELD DOWN':'NOMINAL';$('stt').textContent='STATUS: '+s;$('st').textContent=coreOff?'LOW POWER':'ONLINE'}
 setInterval(bars,1200);bars();
 
+/* phone commands */
+function openURL(u){try{window.open(u,'_blank')}catch(e){location.href=u}}
+function doCall(q){q=(q||'').trim();if(!q)return 'Kisko call karna hai, naam ya number boliye.';
+ var digits=q.replace(/[^0-9+]/g,'');
+ if(digits.length>=6){location.href='tel:'+digits;return 'Call kar rahi hoon '+q+' par.'}
+ if(navigator.contacts&&navigator.contacts.select){
+  navigator.contacts.select(['tel','name'],{multiple:false}).then(function(c){
+   if(c&&c[0]&&c[0].tel&&c[0].tel[0])location.href='tel:'+c[0].tel[0];
+   else log('EVA','Us contact mein number nahi mila.')
+  }).catch(function(){log('EVA','Contact select cancel ho gaya.')});
+  return 'Contacts mein se '+q+' chuniye…'}
+ return 'Is phone mein contact access nahi mila. Seedha number bol kar dekho.'}
+function doYoutube(q){q=(q||'').trim();if(!q){openURL('https://www.youtube.com/');return 'YouTube khol rahi hoon.'}
+ openURL('https://www.youtube.com/results?search_query='+encodeURIComponent(q));return q+' YouTube par search kar rahi hoon.'}
+function doGoogle(q){q=(q||'').trim();if(!q){openURL('https://www.google.com/');return 'Google khol rahi hoon.'}
+ openURL('https://www.google.com/search?q='+encodeURIComponent(q));return q+' Google par search kar rahi hoon.'}
+
 /* assistant brain */
 var JOKES=['Maine WiFi se poocha: itna slow kyun? Bola: main sirf EVA ke liye fast hoon.','Programmer ka dil kyun toota? Uske pyaar mein bahut saare bugs the.','Mera battery 1 percent par hai, par attitude 100 percent par.'];
 function statusText(){var off=parts.filter(function(p){return p.hidden}).map(function(p){return p.name});return 'Sab systems nominal. Parts: '+parts.length+', offline: '+(off.length?off.join(', '):'koi nahi')+'.'}
@@ -143,12 +160,21 @@ function local(t){var s=t.toLowerCase(),m;
  if(/^reset/.test(s)){reset();return 'System reset ho gaya.'}
  if(/^key reset/.test(s)){try{localStorage.removeItem('eva_key')}catch(e){}return 'API key hata di. Agli baar naya poochungi.'}
  if((m=s.match(/^model\s+(\S+)/))){try{localStorage.setItem('eva_model',m[1])}catch(e){}return 'Model badal diya: '+m[1]}
- if(/^help/.test(s))return 'Commands: explode, assemble, scan, status, joke, time, reset, colour red/gold/blue/green/purple. Ya kuch bhi poochho, main jawab dungi.';
+ if((m=s.match(/^(?:(.+?)\s+ko\s+)?call\s+(.+)/))||(m=s.match(/^(.+?)\s+ko\s+call\s*(?:karo|kar do|kijiye)?$/)))return doCall(m[2]||m[1]);
+ if((m=s.match(/^youtube\s*(?:khol|open|kholo)\s*$/)))return doYoutube('');
+ if((m=s.match(/^youtube\s*(?:par|pe)\s+(.+)/)))return doYoutube(m[1]);
+ if((m=s.match(/^(.+?)\s+youtube\s*(?:par|pe)?\s*(?:chalao|bajao|khelo|play\s*karo)$/)))return doYoutube(m[1]);
+ if((m=s.match(/^(.+?)\s+(?:ka\s+|ki\s+)?(?:gaana|gana|song|video)\s*(?:chalao|bajao|play\s*karo)$/)))return doYoutube(m[1]);
+ if((m=s.match(/^google\s*(?:khol|open|kholo)\s*$/)))return doGoogle('');
+ if((m=s.match(/^google\s*(?:par|pe)?\s*search\s+(.+)/)))return doGoogle(m[1]);
+ if((m=s.match(/^(.+?)\s+google\s*(?:par|pe)?\s*search\s*(?:karo)?$/)))return doGoogle(m[1]);
+ if(/^help/.test(s))return 'Commands: explode, assemble, scan, status, joke, time, reset, colour red/gold/blue/green/purple, call <naam/number>, <gaana> youtube par chalao, <kuch> google par search karo. Ya kuch bhi poochho, main jawab dungi.';
  return null}
 function act(a){if(!a||!a.type)return;var p=parts.filter(function(x){return x.id===a.part})[0];
  switch(a.type){case 'explode':setEx(1);break;case 'assemble':setEx(0);break;case 'reset':reset();break;case 'scan':scanT=3;break;
  case 'colour':if(COL[a.value])setColor(COL[a.value]);break;
- case 'hide':if(p){p.hidden=true;sel=p}break;case 'show':if(p){p.hidden=false;sel=p}break;case 'select':if(p)sel=p;break}
+ case 'hide':if(p){p.hidden=true;sel=p}break;case 'show':if(p){p.hidden=false;sel=p}break;case 'select':if(p)sel=p;break;
+ case 'call':doCall(a.value);break;case 'youtube':doYoutube(a.value);break;case 'search':doGoogle(a.value);break}
  ui()}
 function getKey(){var k='';try{k=localStorage.getItem('eva_key')||''}catch(e){}
  if(!k){k=(prompt('Gemini API key daalo (AIza...). Ye sirf aapke phone mein save hogi.')||'').trim();if(k){try{localStorage.setItem('eva_key',k)}catch(e){}}}return k}
@@ -169,24 +195,51 @@ function fillVoices(){var vs=allV().filter(function(v){var l=lg(v);return l.inde
  vsel.innerHTML='<option value="">Auto (ladki)</option>';
  vs.forEach(function(v){var o=document.createElement('option');o.value=v.name;o.textContent=v.name+' ('+v.lang+')';vsel.appendChild(o)});vsel.value=cur}
 if(window.speechSynthesis){speechSynthesis.onvoiceschanged=fillVoices}fillVoices();
-function unlock(){var s=window.speechSynthesis;if(!s)return;try{s.resume();var u=new SpeechSynthesisUtterance(' ');u.volume=0;s.speak(u)}catch(x){}}
-function say(t,lang,alt){speaking=true;var s=window.speechSynthesis;
- if(!voiceOn||!s){speaking=false;setTimeout(listen,300);return}
- var ch=vsel.value?allV().filter(function(v){return v.name===vsel.value})[0]:null,v,txt=t,auto=!ch;
- if(ch){v=ch;if(lg(ch).indexOf('hi')!==0&&alt)txt=alt}
- else{v=pick(lang.toLowerCase())||pick(lang.slice(0,2).toLowerCase());if(!v&&alt){v=pick('en-in')||pick('en');txt=alt}}
- if(!v){v=pick('en');if(alt)txt=alt}
- if(!v&&alt){txt=alt;lang='en-IN'}
- s.cancel();var u=new SpeechSynthesisUtterance(txt);if(v){u.voice=v;u.lang=v.lang}else{u.lang=lang}u.pitch=(auto&&!(v&&FEM.test(v.name)))?1.35:1.05;u.rate=.95;
- var done=false,tm;function fin(){if(done)return;done=true;clearTimeout(tm);speaking=false;setTimeout(listen,300)}
- tm=setTimeout(fin,Math.max(4000,txt.length*130));
- u.onend=u.onerror=fin;window._u=u;s.resume();s.speak(u)}
+var audioCtx=null,curSrc=null;
+function unlock(){var s=window.speechSynthesis;if(s){try{s.resume();var u=new SpeechSynthesisUtterance(' ');u.volume=0;s.speak(u)}catch(x){}}
+ try{if(!audioCtx)audioCtx=new (window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==='suspended')audioCtx.resume()}catch(x){}}
+function b64ToBytes(b){var s=atob(b),a=new Uint8Array(s.length);for(var i=0;i<s.length;i++)a[i]=s.charCodeAt(i);return a}
+function playPCM(b64,done){
+ try{
+  if(!audioCtx)audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==='suspended')audioCtx.resume();
+  var by=b64ToBytes(b64),n=by.length>>1,buf=audioCtx.createBuffer(1,n,24000),ch=buf.getChannelData(0);
+  for(var i=0;i<n;i++){var v=by[i*2]|(by[i*2+1]<<8);if(v>=32768)v-=65536;ch[i]=v/32768}
+  if(curSrc){try{curSrc.stop()}catch(e){}}
+  var src=audioCtx.createBufferSource();src.buffer=buf;src.connect(audioCtx.destination);src.onended=done;curSrc=src;src.start();return true
+ }catch(e){return false}
+}
+function geminiSpeak(txt,done,fail){
+ var k='';try{k=localStorage.getItem('eva_key')||''}catch(e){}
+ if(!k||!txt){fail();return}
+ fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent',{method:'POST',headers:{'content-type':'application/json','x-goog-api-key':k},
+  body:JSON.stringify({contents:[{parts:[{text:txt}]}],generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:'Kore'}}}}})})
+ .then(function(r){if(!r.ok)throw new Error('tts '+r.status);return r.json()})
+ .then(function(d){var p=d.candidates[0].content.parts[0].inlineData.data;if(!playPCM(p,done))fail()})
+ .catch(function(){fail()})
+}
+function say(t,lang,alt){speaking=true;
+ if(!voiceOn){speaking=false;setTimeout(listen,300);return}
+ var finished=false,tm;
+ function fin(){if(finished)return;finished=true;clearTimeout(tm);speaking=false;setTimeout(listen,300)}
+ function fallback(){var s=window.speechSynthesis;
+  if(!s){fin();return}
+  var ch=vsel.value?allV().filter(function(v){return v.name===vsel.value})[0]:null,v,txt=t,auto=!ch;
+  if(ch){v=ch;if(lg(ch).indexOf('hi')!==0&&alt)txt=alt}
+  else{v=pick(lang.toLowerCase())||pick(lang.slice(0,2).toLowerCase());if(!v&&alt){v=pick('en-in')||pick('en');txt=alt}}
+  if(!v){v=pick('en');if(alt)txt=alt}
+  if(!v&&alt){txt=alt;lang='en-IN'}
+  s.cancel();var u=new SpeechSynthesisUtterance(txt);if(v){u.voice=v;u.lang=v.lang}else{u.lang=lang}u.pitch=(auto&&!(v&&FEM.test(v.name)))?1.35:1.05;u.rate=.95;
+  tm=setTimeout(fin,Math.max(4000,txt.length*130));
+  u.onend=u.onerror=fin;window._u=u;s.resume();s.speak(u)}
+ tm=setTimeout(fin,Math.max(5000,(t||'').length*150));
+ geminiSpeak(t,fin,fallback)}
 function handle(text){text=(text||'').trim();if(!text||busy)return;log('YOU',text);
  var r=local(text);if(r!==null){log('EVA',r);say(r,'en-IN');return}
  if(!sample){var m='AI access nahi mila. "help" try karo.';log('EVA',m);say(m,'en-IN');return}
  busy=true;log('EVA','soch rahi hoon…');
  var st=parts.map(function(p){return p.id+' ('+p.name+'): '+(p.hidden?'hidden':'on')}).join(', ');
- var pr='Tum EVA ho, Tony Stark ke JARVIS jaisi 3D hologram AI assistant. Chhota (1-3 vaakya), dostana jawab do, Hinglish mein. Parts: '+st+'. Explode: '+exT+'. Agar user part hide/show, explode, assemble, scan, reset ya colour badalna chahe to action do. Sirf JSON do, aur kuch nahi: {"reply":"Hinglish Roman mein jawab","speak":"wahi jawab Devanagari Hindi mein, bolne ke liye","action":null ya {"type":"hide|show|explode|assemble|scan|reset|colour|select","part":"core|energy|shell|ring1|ring2|ring3|arc|dust","value":"red|gold|blue|green|purple|cyan|orange (sirf colour ke liye)"}}.\nBaatcheet:\n'+hist.slice(-6).join('\n')+'\nUser: '+text;
+ var pr='Tum EVA ho, Tony Stark ke JARVIS jaisi 3D hologram AI assistant. Chhota (1-3 vaakya), dostana jawab do, Hinglish mein. Parts: '+st+'. Explode: '+exT+'. Agar user part hide/show, explode, assemble, scan, reset ya colour badalna chahe to action do. Sirf JSON do, aur kuch nahi: {"reply":"Hinglish Roman mein jawab","speak":"wahi jawab Devanagari Hindi mein, bolne ke liye","action":null ya {"type":"hide|show|explode|assemble|scan|reset|colour|select|call|youtube|search","part":"core|energy|shell|ring1|ring2|ring3|arc|dust (sirf hide/show/select ke liye)","value":"colour ke liye red|gold|blue|green|purple|cyan|orange; call ke liye naam/number; youtube ke liye gaana/video ka naam; search ke liye google query"}}.\nBaatcheet:\n'+hist.slice(-6).join('\n')+'\nUser: '+text;
  sample.json(pr,{cache:false}).then(function(o){
   if(typeof o==='string'){try{o=JSON.parse(o)}catch(x){o={reply:o,speak:o}}}
   o=o||{};var rp=o.reply||'Ji, boliye.';hist.push('User: '+text);hist.push('EVA: '+rp);
