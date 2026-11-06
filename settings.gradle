@@ -1,0 +1,2 @@
+rootProject.name = "eva-android"
+include ':app'
