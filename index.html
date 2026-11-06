@@ -129,9 +129,14 @@ function bars(){var coreOff=pHid('core'),shOff=pHid('shell');
 setInterval(bars,1200);bars();
 
 /* phone commands */
-function openURL(u){try{window.open(u,'_blank')}catch(e){location.href=u}}
+var NATIVE=!!(window.Android&&window.Android.youtubeSearch);
+function openURL(u){try{var w=window.open(u,'_blank');if(!w||w.closed||typeof w.closed==='undefined')location.href=u}catch(e){location.href=u}}
 function doCall(q){q=(q||'').trim();if(!q)return 'Kisko call karna hai, naam ya number boliye.';
  var digits=q.replace(/[^0-9+]/g,'');
+ if(NATIVE){
+  if(digits.length>=6){window.Android.call(digits);return 'Call kar rahi hoon '+q+' par.'}
+  if(window.Android.pickContact){window.Android.pickContact();return 'Contacts mein se '+q+' chuniye…'}
+ }
  if(digits.length>=6){location.href='tel:'+digits;return 'Call kar rahi hoon '+q+' par.'}
  if(navigator.contacts&&navigator.contacts.select){
   navigator.contacts.select(['tel','name'],{multiple:false}).then(function(c){
@@ -140,9 +145,13 @@ function doCall(q){q=(q||'').trim();if(!q)return 'Kisko call karna hai, naam ya 
   }).catch(function(){log('EVA','Contact select cancel ho gaya.')});
   return 'Contacts mein se '+q+' chuniye…'}
  return 'Is phone mein contact access nahi mila. Seedha number bol kar dekho.'}
-function doYoutube(q){q=(q||'').trim();if(!q){openURL('https://www.youtube.com/');return 'YouTube khol rahi hoon.'}
+function doYoutube(q){q=(q||'').trim();
+ if(NATIVE){window.Android.youtubeSearch(q);return q?q+' YouTube par chala rahi hoon.':'YouTube khol rahi hoon.'}
+ if(!q){openURL('https://www.youtube.com/');return 'YouTube khol rahi hoon.'}
  openURL('https://www.youtube.com/results?search_query='+encodeURIComponent(q));return q+' YouTube par search kar rahi hoon.'}
-function doGoogle(q){q=(q||'').trim();if(!q){openURL('https://www.google.com/');return 'Google khol rahi hoon.'}
+function doGoogle(q){q=(q||'').trim();
+ if(NATIVE){window.Android.googleSearch(q);return q?q+' Google par search kar rahi hoon.':'Google khol rahi hoon.'}
+ if(!q){openURL('https://www.google.com/');return 'Google khol rahi hoon.'}
  openURL('https://www.google.com/search?q='+encodeURIComponent(q));return q+' Google par search kar rahi hoon.'}
 
 /* assistant brain */
